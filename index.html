@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Страны, города и реки</title>
+<title>Города мира</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,13 +11,19 @@
 <div class="app">
   <header class="hud">
     <div class="hud-left">
-      <div class="level-badge" id="levelBadge">1</div>
-      <div class="level-name" id="levelName">Постсоветское пространство</div>
+      <button class="region-btn" id="regionBtn" title="Карта мира">
+        <span class="region-icon">🗺</span>
+      </button>
+      <div class="level-info">
+        <div class="level-name" id="levelName">Постсоветское пространство</div>
+        <div class="level-sub" id="levelSub">Поле 6×6 · Раунд 1/10</div>
+      </div>
     </div>
     <div class="hud-right">
       <div class="score-box">
         <span class="score-label">Очки</span>
         <span class="score-value" id="scoreDisplay">0</span>
+        <span class="score-record" id="recordDisplay">рекорд: —</span>
       </div>
       <div class="stars-display" id="starsDisplay">☆☆☆☆☆</div>
     </div>
@@ -25,10 +31,11 @@
 
   <div class="progress-wrap">
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-    <div class="progress-text" id="progressText">0 / 0</div>
+    <div class="progress-text" id="progressText">0 / 10</div>
   </div>
 
   <main class="game-area">
+    <div class="words-to-find" id="wordsToFind"></div>
     <div class="grid-wrap">
       <div class="grid" id="grid"></div>
       <div class="float-score" id="floatScore"></div>
@@ -45,23 +52,54 @@
       <span class="btn-icon">🔄</span>
       <span class="btn-label">Заново</span>
     </button>
-    <button class="btn btn-skip" id="skipBtn">
-      <span class="btn-icon">⏭</span>
-      <span class="btn-label">Пропустить</span>
+    <button class="btn btn-next" id="nextRoundBtn" disabled>
+      <span class="btn-icon">▶</span>
+      <span class="btn-label">Дальше</span>
     </button>
   </footer>
 </div>
 
+<!-- Level complete -->
 <div class="overlay hidden" id="levelOverlay">
   <div class="overlay-card">
     <div class="overlay-title" id="overlayTitle">Уровень пройден!</div>
     <div class="overlay-stars" id="overlayStars">★★★☆☆</div>
     <div class="overlay-score" id="overlayScore">0 очков</div>
-    <div class="overlay-hint" id="overlayHint">Нужно 3 звезды для перехода</div>
+    <div class="overlay-hint" id="overlayHint"></div>
     <div class="overlay-buttons">
       <button class="btn btn-secondary hidden" id="retryBtn">Повторить</button>
-      <button class="btn btn-primary" id="nextBtn">Дальше</button>
+      <button class="btn btn-secondary hidden" id="toMapBtn">К карте</button>
+      <button class="btn btn-primary hidden" id="nextLevelBtn">Дальше</button>
     </div>
+  </div>
+</div>
+
+<!-- World map -->
+<div class="overlay hidden" id="mapOverlay">
+  <div class="map-card">
+    <div class="map-title">Карта мира</div>
+    <div class="map-subtitle" id="mapSubtitle"></div>
+    <div class="map-svg-wrap">
+      <svg class="map-svg" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+        <g class="continents" fill="#dfe6dd" stroke="#c8d1c6" stroke-width="1.5">
+          <path d="M70,80 C110,50 190,55 220,90 C240,120 220,170 190,200 C160,230 120,230 90,210 C60,190 50,140 70,80 Z"/>
+          <path d="M190,235 C230,235 250,270 240,320 C230,365 200,385 175,375 C155,365 150,330 160,290 C168,255 175,240 190,235 Z"/>
+          <path d="M365,95 C400,80 445,85 460,110 C470,140 455,170 425,175 C395,180 370,165 360,140 C352,120 352,105 365,95 Z"/>
+          <path d="M380,200 C425,195 465,215 470,260 C475,310 445,350 405,350 C375,350 355,315 355,275 C355,235 360,210 380,200 Z"/>
+          <path d="M478,180 C500,165 530,170 545,190 C555,210 545,235 525,240 C505,245 485,235 478,215 C473,200 473,190 478,180 Z"/>
+          <path d="M560,105 C610,90 660,105 675,145 C685,180 665,215 625,215 C585,215 560,185 555,150 C552,130 554,115 560,105 Z"/>
+          <path d="M620,295 C655,285 685,300 690,325 C693,350 670,365 640,360 C615,355 605,335 610,315 C613,305 616,300 620,295 Z"/>
+        </g>
+        <g id="mapPoints" class="map-points"></g>
+      </svg>
+    </div>
+    <div class="map-legend">
+      <span class="legend-item"><span class="legend-dot available"></span>Доступно</span>
+      <span class="legend-item"><span class="legend-dot current"></span>Текущий</span>
+      <span class="legend-item"><span class="legend-dot mastered"></span>5★</span>
+      <span class="legend-item"><span class="legend-dot locked"></span>Закрыто</span>
+    </div>
+    <button class="btn btn-secondary map-close" id="mapCloseBtn">Закрыть</button>
   </div>
 </div>
 
@@ -72,7 +110,7 @@
 <div class="overlay hidden" id="finalOverlay">
   <div class="overlay-card">
     <div class="overlay-title">🎉 Поздравляем!</div>
-    <div class="overlay-subtitle">Вы прошли все уровни!</div>
+    <div class="overlay-subtitle">Все регионы пройдены!</div>
     <button class="btn btn-primary" id="restartAllBtn">Играть заново</button>
   </div>
 </div>
