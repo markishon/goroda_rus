@@ -79,9 +79,6 @@
   // ============ PERSISTENCE ============
   const KEY_PROGRESS = 'sgr_cities_progress_v2';
 
-  function emptyRegionProgress() {
-    return { stars: 0, roundsInStage: 0, score: 0, bestScore: 0, usedInStage: [] };
-  }
   function loadProgress() {
     let raw = null;
     try { raw = JSON.parse(localStorage.getItem(KEY_PROGRESS) || '{}'); } catch (e) { raw = {}; }
@@ -149,9 +146,8 @@
         if (!grid[r][c]) grid[r][c] = FILLER[randInt(FILLER.length)];
   }
 
-  // setupRound: без повторов, возвращает { grid, placements, used }
   function setupRound(pool, gridSize, usedSet) {
-    // 1) Пытаемся разместить 3 уникальных
+    // 1) Пытаемся разместить 3 уникальных (не из usedSet)
     for (let attempt = 0; attempt < 120; attempt++) {
       const grid = makeEmptyGrid(gridSize);
       const placements = [];
@@ -335,7 +331,7 @@
     pr.stars += 1;
     pr.roundsInStage = 0;
     state.hintsLeft = HINTS_PER_STAGE;
-    // ВАЖНО: usedInStage НЕ сбрасываем — города не должны повторяться между этапами
+    // ВАЖНО: usedInStage НЕ сбрасываем — города не повторяются между этапами
 
     if (pr.stars >= STAGES_PER_REGION) {
       saveProgress(); updateHUD(); showRegionComplete();
@@ -477,11 +473,33 @@
     updateHUD();
   }
 
-  function restartRound() {
+  // ============ FULL RESET ============
+  // Кнопка "Заново" — полный сброс всей игры с самого начала.
+  function fullReset() {
     if (state.isDragging) return;
+    const ok = confirm('Начать игру с самого начала?\n\nВесь прогресс будет удалён: звёзды, рекорды, очки во всех регионах.');
+    if (!ok) return;
+
+    // Чистим сохранённый прогресс
+    try { localStorage.removeItem(KEY_PROGRESS); } catch (e) {}
+
+    // Сбрасываем автотаймер и текущую игру
     if (state.autoAdvanceTimer) { clearTimeout(state.autoAdvanceTimer); state.autoAdvanceTimer = null; }
+    state.roundWords = [];
+    state.path = [];
+    state.isDragging = false;
     state.foundInRound = 0;
-    startRound();
+    state.hintsLeft = HINTS_PER_STAGE;
+
+    // Закрываем все модалки
+    els.levelOverlay.classList.add('hidden');
+    els.mapOverlay.classList.add('hidden');
+    els.finalOverlay.classList.add('hidden');
+
+    // Перечитываем пустые записи и стартуем регион 1, этап 1
+    loadProgress();
+    state.hintsLeft = HINTS_PER_STAGE;
+    startRegion(1);
   }
 
   // ============ MAP ============
@@ -558,7 +576,7 @@
     els.grid.addEventListener('pointerup', onPointerUp);
     els.grid.addEventListener('pointercancel', onPointerUp);
     els.hintBtn.addEventListener('click', () => { ensureAudio(); useHint(); });
-    els.restartBtn.addEventListener('click', () => { ensureAudio(); restartRound(); });
+    els.restartBtn.addEventListener('click', () => { ensureAudio(); fullReset(); });
     els.nextRoundBtn.addEventListener('click', () => { ensureAudio(); advanceRound(); });
     els.regionBtn.addEventListener('click', () => openMap(null, false));
     els.mapCloseBtn.addEventListener('click', () => els.mapOverlay.classList.add('hidden'));
@@ -568,12 +586,7 @@
     });
     els.toMapBtn.addEventListener('click', () => { els.levelOverlay.classList.add('hidden'); openMap(null, false); });
     els.nextLevelBtn.addEventListener('click', () => { els.levelOverlay.classList.add('hidden'); openMap(null, false); });
-    els.restartAllBtn.addEventListener('click', () => {
-      els.finalOverlay.classList.add('hidden');
-      try { localStorage.removeItem(KEY_PROGRESS); } catch (e) {}
-      loadProgress(); state.hintsLeft = HINTS_PER_STAGE;
-      startRegion(getStartRegion());
-    });
+    els.restartAllBtn.addEventListener('click', () => { ensureAudio(); fullReset(); });
     window.addEventListener('resize', updateCellFontSize);
     window.addEventListener('orientationchange', updateCellFontSize);
   }
