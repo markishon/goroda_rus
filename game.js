@@ -41,15 +41,14 @@
   // ============ STATE ============
   const state = {
     currentRegionId: 1,
-    regions: {},       // per-region persistent: { stars, roundsInStage, score, bestScore }
-    roundWords: [],    // текущий раунд: [{ word, placement, found }]
+    regions: {},
+    roundWords: [],
     grid: [],
     gridSize: 6,
     path: [],
     isDragging: false,
-    foundInRound: 0,   // 0..3 в текущем раунде
+    foundInRound: 0,
     hintsLeft: 0,
-    hintsUsedInStage: 0,
     autoAdvanceTimer: null,
     mapPromptActive: false
   };
@@ -103,20 +102,30 @@
     return a;
   };
   const randInt = n => Math.floor(Math.random() * n);
+  const num = (v, def=0) => (typeof v === 'number' && isFinite(v)) ? v : def;
 
   // ============ PERSISTENCE ============
   const KEY_PROGRESS = 'sgr_cities_progress_v2';
 
+  function emptyRegionProgress() {
+    return { stars: 0, roundsInStage: 0, score: 0, bestScore: 0 };
+  }
+
   function loadProgress() {
-    try {
-      const raw = localStorage.getItem(KEY_PROGRESS);
-      state.regions = raw ? JSON.parse(raw) : {};
-    } catch (e) { state.regions = {}; }
-    // ensure each region has entry
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(KEY_PROGRESS) || '{}'); }
+    catch (e) { raw = {}; }
+    if (!raw || typeof raw !== 'object') raw = {};
+
+    state.regions = {};
     REGIONS.forEach(r => {
-      if (!state.regions[r.id]) {
-        state.regions[r.id] = { stars: 0, roundsInStage: 0, score: 0, bestScore: 0 };
-      }
+      const src = raw[r.id] || {};
+      // Нормализуем поля: всегда числа, всегда в допустимых границах
+      const stars = Math.max(0, Math.min(STAGES_PER_REGION, num(src.stars, 0)));
+      const roundsInStage = Math.max(0, Math.min(ROUNDS_PER_STAGE - 1, num(src.roundsInStage, 0)));
+      const score = Math.max(0, num(src.score, 0));
+      const bestScore = Math.max(0, num(src.bestScore, score));
+      state.regions[r.id] = { stars, roundsInStage, score, bestScore };
     });
   }
   function saveProgress() {
@@ -134,14 +143,13 @@
     return REGIONS.every(r => isRegionMastered(r.id));
   }
   function getStartRegion() {
-    // первый незавершённый разблокированный
     for (const r of REGIONS) {
       if (isRegionUnlocked(r.id) && !isRegionMastered(r.id)) return r.id;
     }
-    return REGIONS.length;
+    return 1;
   }
   function gridSizeForStars(stars) {
-    return Math.min(10, GRID_SIZE_AT_STAGE_1 + stars);
+    return Math.min(10, GRID_SIZE_AT_STAGE_1 + num(stars, 0));
   }
 
   // ============ GRID LOGIC ============
@@ -182,6 +190,7 @@
       for (let c = 0; c < n; c++)
         if (!grid[r][c]) grid[r][c] = FILLER[randInt(FILLER.length)];
   }
+
   function setupRound(pool, gridSize) {
     for (let target = 3; target >= 1; target--) {
       for (let attempt = 0; attempt < 60; attempt++) {
@@ -205,12 +214,16 @@
         }
       }
     }
-    return null;
+    // Фолбэк — поле без спрятанных слов, только fillers
+    const grid = makeEmptyGrid(gridSize);
+    fillBlanks(grid, gridSize);
+    return { grid, placements: [] };
   }
 
   // ============ RENDER ============
   function renderGrid() {
     const n = state.gridSize;
+    if (!n || !state.grid.length) return;
     els.grid.innerHTML = '';
     els.grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
     els.grid.style.gridTemplateRows = `repeat(${n}, 1fr)`;
@@ -221,7 +234,7 @@
         cell.className = 'cell';
         cell.dataset.r = r;
         cell.dataset.c = c;
-        cell.textContent = state.grid[r][c];
+        cell.textContent = state.grid[r][c] || '';
         frag.appendChild(cell);
       }
     }
@@ -256,17 +269,19 @@
   // ============ HUD ============
   function updateHUD() {
     const pr = pCur();
-    const stage = pr.stars + 1;                 // 1..5
-    const size = gridSizeForStars(pr.stars);    // 6..10
-    const rInStage = pr.roundsInStage;          // 0..10
+    const stage = pr.stars + 1;
+    const size = gridSizeForStars(pr.stars);
+    const rInStage = pr.roundsInStage;
 
     els.score.textContent = pr.score + state.foundInRound * SCORE_PER_WORD;
     els.stars.textContent = '★'.repeat(pr.stars) + '☆'.repeat(STAGES_PER_REGION - pr.stars);
     els.record.textContent = pr.bestScore > 0 ? `рекорд: ${pr.bestScore}` : 'рекорд: —';
 
     const region = REGIONS.find(r => r.id === state.currentRegionId);
-    els.levelName.textContent = region.name;
-    els.levelSub.textContent = `Уровень ${Math.min(stage, STAGES_PER_REGION)} · Поле ${size}×${size} · Раунд ${Math.min(rInStage + 1, ROUNDS_PER_STAGE)}/${ROUNDS_PER_STAGE}`;
+    if (region) {
+      els.levelName.textContent = region.name;
+      els.levelSub.textContent = `Уровень ${Math.min(stage, STAGES_PER_REGION)} · Поле ${size}×${size} · Раунд ${Math.min(rInStage + 1, ROUNDS_PER_STAGE)}/${ROUNDS_PER_STAGE}`;
+    }
 
     els.progressText.textContent = `${rInStage} / ${ROUNDS_PER_STAGE}`;
     els.progressFill.style.width = `${(rInStage / ROUNDS_PER_STAGE) * 100}%`;
@@ -280,20 +295,17 @@
   // ============ ROUND FLOW ============
   function startRegion(regionId) {
     state.currentRegionId = regionId;
-    const pr = p(regionId);
     if (isRegionMastered(regionId)) {
       showToast('Этот регион уже пройден на 5★');
       return;
     }
-    // сброс раунда, но прогресс региона сохранён
     state.roundWords = [];
     state.path = [];
     state.isDragging = false;
     state.foundInRound = 0;
-    state.hintsLeft = HINTS_PER_STAGE - 0; // каждый этап стартует с полным набором
-    // счётчик подсказок: 3 на этап; см. startRound для восстановления
+    state.hintsLeft = HINTS_PER_STAGE;
     if (state.autoAdvanceTimer) { clearTimeout(state.autoAdvanceTimer); state.autoAdvanceTimer = null; }
-    els.gridWrap.style.setProperty('--n', gridSizeForStars(pr.stars));
+    els.gridWrap.style.setProperty('--n', gridSizeForStars(p(regionId).stars));
     startRound();
   }
 
@@ -301,20 +313,33 @@
     const pr = pCur();
     const size = gridSizeForStars(pr.stars);
     const region = REGIONS.find(r => r.id === state.currentRegionId);
+    if (!region) { console.error('Region not found:', state.currentRegionId); return; }
 
-    // Подсказки: 3 на этап. Считаем, сколько уже потрачено в этом этапе.
-    // (сбрасывается при завершении этапа)
-    // Для простоты: храним оставшиеся подсказки для текущего этапа в state.hintsLeft,
-    // а при входе в регион — восстанавливаем 3 (перезаход в регион тоже даст 3).
-    // Чтобы не давать бесконечно подсказок при переключении — восстанавливаем 3 только
-    // если этап не начинался (roundsInStage == 0) или игрок вернулся спустя новый этап.
-    if (state.hintsLeft === undefined || state.hintsLeft === null) state.hintsLeft = HINTS_PER_STAGE;
+    if (typeof state.hintsLeft !== 'number' || isNaN(state.hintsLeft)) {
+      state.hintsLeft = HINTS_PER_STAGE;
+    }
 
     state.gridSize = size;
     els.gridWrap.style.setProperty('--n', size);
 
-    const result = setupRound(region.cities, size);
-    if (!result) { console.error('setupRound failed'); return; }
+    let result;
+    try {
+      result = setupRound(region.cities, size);
+    } catch (e) {
+      console.error('setupRound threw:', e);
+      const grid = makeEmptyGrid(size);
+      fillBlanks(grid, size);
+      result = { grid, placements: [] };
+    }
+    if (!result || !result.grid) {
+      console.error('setupRound returned no grid');
+      const grid = makeEmptyGrid(size);
+      fillBlanks(grid, size);
+      result = { grid, placements: [] };
+    }
+    if (result.placements.length === 0) {
+      console.warn('Нет спрятанных слов в этом раунде — только fillers');
+    }
 
     state.grid = result.grid;
     state.roundWords = result.placements.map(pl => ({ word: pl.word, placement: pl, found: false }));
@@ -337,15 +362,10 @@
   function advanceRound() {
     if (state.foundInRound < 1) return;
     const pr = pCur();
-
-    // Начисляем очки за раунд
     pr.score += state.foundInRound * SCORE_PER_WORD;
     if (pr.score > pr.bestScore) pr.bestScore = pr.score;
-
-    // Завершаем раунд
     pr.roundsInStage += 1;
 
-    // Проверяем завершение этапа
     if (pr.roundsInStage >= ROUNDS_PER_STAGE) {
       completeStage();
     } else {
@@ -359,11 +379,8 @@
     const pr = pCur();
     pr.stars += 1;
     pr.roundsInStage = 0;
-
-    // Сбрасываем подсказки на новый этап
     state.hintsLeft = HINTS_PER_STAGE;
 
-    // Если регион завершён
     if (pr.stars >= STAGES_PER_REGION) {
       saveProgress();
       updateHUD();
@@ -371,11 +388,9 @@
       return;
     }
 
-    // Если достигли 3-й звезды — открываем карту
     if (pr.stars === STAR_FOR_MAP) {
       saveProgress();
       updateHUD();
-      // даём проиграться звуку звезды, затем — карта
       SND.levelUp();
       showStarToast(pr.stars, () => {
         openMap('Поздравляем с 3-й звездой! Продолжить здесь или выбрать другой регион?', true);
@@ -383,7 +398,6 @@
       return;
     }
 
-    // Иначе — празднуем и авто-переходим к следующему этапу
     saveProgress();
     updateHUD();
     SND.star();
@@ -412,7 +426,6 @@
     els.overlayStars.textContent = '★★★★★';
     els.overlayScore.innerHTML = `${pr.score} очков${pr.bestScore > 0 ? ` <span class="prev-record">рекорд: ${pr.bestScore}</span>` : ''}`;
     els.overlayHint.textContent = 'Все 5 звёзд собраны. Выберите следующий регион на карте.';
-
     els.nextLevelBtn.classList.add('hidden');
     els.toMapBtn.classList.remove('hidden');
 
@@ -523,7 +536,6 @@
     setTimeout(() => { clearPathVisual(); state.path = []; }, 900);
 
     if (state.foundInRound >= state.roundWords.length) {
-      // Все три найдены — авто-переход через 1.5 сек (но кнопка уже активна)
       SND.roundComplete();
       state.autoAdvanceTimer = setTimeout(() => {
         state.autoAdvanceTimer = null;
@@ -543,6 +555,7 @@
     const { r, c, dr, dc } = item.placement;
     for (let i = 0; i < item.word.length; i++) {
       const el = cellEl(r + dr*i, c + dc*i);
+      if (!el) continue;
       el.classList.add('hint-glow');
       setTimeout(() => el.classList.remove('hint-glow'), 2000);
     }
@@ -552,8 +565,6 @@
   // ============ RESTART / REROLL ============
   function restartRound() {
     if (state.isDragging) return;
-    // Мягкий "заново": перегенерировать текущий раунд.
-    // Прогресс этапа (roundsInStage), счёт и звёзды не теряются.
     if (state.autoAdvanceTimer) { clearTimeout(state.autoAdvanceTimer); state.autoAdvanceTimer = null; }
     state.foundInRound = 0;
     startRound();
@@ -586,13 +597,13 @@
       circle.setAttribute('class', 'point-circle');
       g.appendChild(circle);
 
-      const num = document.createElementNS(svgNS, 'text');
-      num.setAttribute('x', region.point.x);
-      num.setAttribute('y', region.point.y + 5);
-      num.setAttribute('text-anchor', 'middle');
-      num.setAttribute('class', 'point-num');
-      num.textContent = region.id;
-      g.appendChild(num);
+      const numEl = document.createElementNS(svgNS, 'text');
+      numEl.setAttribute('x', region.point.x);
+      numEl.setAttribute('y', region.point.y + 5);
+      numEl.setAttribute('text-anchor', 'middle');
+      numEl.setAttribute('class', 'point-num');
+      numEl.textContent = region.id;
+      g.appendChild(numEl);
 
       if (pr.stars > 0) {
         const st = document.createElementNS(svgNS, 'text');
@@ -625,11 +636,9 @@
     state.mapPromptActive = false;
 
     if (isCurrent) {
-      // продолжить здесь
       state.foundInRound = 0;
       startRound();
     } else {
-      // переключиться
       showGlobeThen(() => startRegion(regionId));
     }
   }
@@ -654,14 +663,8 @@
     const unlockedCount = REGIONS.filter(r => isRegionUnlocked(r.id)).length;
     els.mapSubtitle.textContent = subtitle || `Открыто регионов: ${unlockedCount} / ${REGIONS.length}`;
 
-    // Показываем "Продолжить здесь" только если это prompt после звезды
-    // или игрок нажал карту во время игры (тогда скрываем, чтобы не путать)
-    if (asPrompt) {
-      els.mapContinueBtn.classList.remove('hidden');
-    } else {
-      // Разрешаем нажать "Продолжить здесь" тоже — если игрок не хочет никуда идти
-      els.mapContinueBtn.classList.add('hidden');
-    }
+    if (asPrompt) els.mapContinueBtn.classList.remove('hidden');
+    else els.mapContinueBtn.classList.add('hidden');
 
     els.mapOverlay.classList.remove('hidden');
   }
@@ -718,7 +721,8 @@
     });
     els.restartAllBtn.addEventListener('click', () => {
       els.finalOverlay.classList.add('hidden');
-      startRegion(1);
+      loadProgress();
+      startRegion(getStartRegion());
     });
 
     window.addEventListener('resize', updateCellFontSize);
@@ -727,10 +731,14 @@
 
   // ============ INIT ============
   function init() {
-    loadProgress();
-    bind();
-    state.hintsLeft = HINTS_PER_STAGE;
-    startRegion(getStartRegion());
+    try {
+      loadProgress();
+      bind();
+      state.hintsLeft = HINTS_PER_STAGE;
+      startRegion(getStartRegion());
+    } catch (e) {
+      console.error('Init error:', e);
+    }
   }
   document.addEventListener('DOMContentLoaded', init);
 })();
