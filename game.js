@@ -51,14 +51,15 @@
   // ============= STATE =============
   const state = {
     levelIdx: 0,
-    levelWords: [],       // перемешанный пул
+    levelWords: [],
     levelMaxScore: 0,
     levelScore: 0,
     foundCount: 0,
     hintsLeft: 0,
     currentWord: null,
-    currentPlacement: null, // {r,c,dr,dc}
+    currentPlacement: null,
     grid: [],
+    gridSize: 8,       // пересчитывается под каждое слово
     totalWords: 0,
     path: [],
     isDragging: false
@@ -68,6 +69,7 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     grid: $('grid'),
+    gridWrap: document.querySelector('.grid-wrap'),
     score: $('scoreDisplay'),
     stars: $('starsDisplay'),
     levelBadge: $('levelBadge'),
@@ -104,24 +106,22 @@
   const randInt = (max) => Math.floor(Math.random() * max);
 
   // ============= GRID =============
-  function makeEmptyGrid() {
-    return Array.from({ length: GRID_SIZE }, () =>
-      Array.from({ length: GRID_SIZE }, () => '')
-    );
+  function makeEmptyGrid(n) {
+    return Array.from({ length: n }, () => Array.from({ length: n }, () => ''));
   }
 
   const DIRS = [
-    { dr: 0, dc: 1 },   // →
-    { dr: 0, dc: -1 },  // ←
-    { dr: 1, dc: 0 },   // ↓
-    { dr: -1, dc: 0 }   // ↑
+    { dr: 0, dc: 1 },
+    { dr: 0, dc: -1 },
+    { dr: 1, dc: 0 },
+    { dr: -1, dc: 0 }
   ];
 
-  function canPlace(grid, word, r, c, dr, dc) {
+  function canPlace(grid, n, word, r, c, dr, dc) {
     const len = word.length;
     const endR = r + dr * (len - 1);
     const endC = c + dc * (len - 1);
-    if (endR < 0 || endR >= GRID_SIZE || endC < 0 || endC >= GRID_SIZE) return false;
+    if (endR < 0 || endR >= n || endC < 0 || endC >= n) return false;
     for (let i = 0; i < len; i++) {
       const cell = grid[r + dr * i][c + dc * i];
       if (cell && cell !== word[i]) return false;
@@ -129,18 +129,17 @@
     return true;
   }
 
-  function placeWord(grid, word) {
-    const len = word.length;
+  function placeWord(grid, n, word) {
     const shuffledDirs = shuffle(DIRS);
     const positions = [];
-    for (let r = 0; r < GRID_SIZE; r++)
-      for (let c = 0; c < GRID_SIZE; c++) positions.push([r, c]);
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++) positions.push([r, c]);
     const shuffledPos = shuffle(positions);
 
     for (const dir of shuffledDirs) {
       for (const [r, c] of shuffledPos) {
-        if (canPlace(grid, word, r, c, dir.dr, dir.dc)) {
-          for (let i = 0; i < len; i++)
+        if (canPlace(grid, n, word, r, c, dir.dr, dir.dc)) {
+          for (let i = 0; i < word.length; i++)
             grid[r + dir.dr * i][c + dir.dc * i] = word[i];
           return { r, c, dr: dir.dr, dc: dir.dc };
         }
@@ -149,20 +148,20 @@
     return null;
   }
 
-  function fillBlanks(grid) {
-    for (let r = 0; r < GRID_SIZE; r++)
-      for (let c = 0; c < GRID_SIZE; c++)
+  function fillBlanks(grid, n) {
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++)
         if (!grid[r][c]) grid[r][c] = FILLER[randInt(FILLER.length)];
   }
 
   // ============= RENDER GRID =============
-  function renderGrid() {
+  function renderGrid(n) {
     els.grid.innerHTML = '';
-    els.grid.style.gridTemplateColumns = `repeat(${GRID_SIZE},1fr)`;
-    els.grid.style.gridTemplateRows = `repeat(${GRID_SIZE},1fr)`;
+    els.grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    els.grid.style.gridTemplateRows = `repeat(${n}, 1fr)`;
     const frag = document.createDocumentFragment();
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
         cell.dataset.r = r;
@@ -174,8 +173,18 @@
     els.grid.appendChild(frag);
   }
 
+  function updateCellFontSize() {
+    const w = els.grid.clientWidth;
+    const n = state.gridSize;
+    if (!w || !n) return;
+    // padding 6px*2, gap 2px*(n-1)
+    const cellSize = (w - 12 - (n - 1) * 2) / n;
+    const fs = Math.max(8, Math.min(40, Math.round(cellSize * 0.55)));
+    els.grid.style.fontSize = fs + 'px';
+  }
+
   function cellEl(r, c) {
-    return els.grid.children[r * GRID_SIZE + c];
+    return els.grid.children[r * state.gridSize + c];
   }
 
   // ============= NEW WORD ROUND =============
@@ -187,26 +196,31 @@
     const word = state.levelWords[0];
     state.currentWord = word;
 
+    // Динамический размер поля: длина слова + 2, не меньше MIN_GRID_SIZE
+    const n = Math.max(MIN_GRID_SIZE, word.length + EXTRA_LETTERS);
+    state.gridSize = n;
+    els.gridWrap.style.setProperty('--n', n);
+
     let grid, placement;
     for (let attempt = 0; attempt < 50; attempt++) {
-      grid = makeEmptyGrid();
-      placement = placeWord(grid, word);
+      grid = makeEmptyGrid(n);
+      placement = placeWord(grid, n, word);
       if (placement) break;
     }
     if (!placement) {
-      // не удалось разместить — пропускаем слово и продолжаем
       state.levelWords.shift();
       newRound();
       return;
     }
     state.currentPlacement = placement;
-    fillBlanks(grid);
+    fillBlanks(grid, n);
     state.grid = grid;
     state.path = [];
 
     els.grid.classList.add('refresh');
     setTimeout(() => {
-      renderGrid();
+      renderGrid(n);
+      updateCellFontSize();
       els.grid.classList.remove('refresh');
       els.grid.classList.add('appear');
       setTimeout(() => els.grid.classList.remove('appear'), 500);
@@ -310,13 +324,11 @@
     state.levelScore += SCORE_PER_WORD;
     state.foundCount += 1;
 
-    // Счёт + анимация
     els.score.textContent = state.levelScore;
     els.score.classList.remove('bump');
     void els.score.offsetWidth;
     els.score.classList.add('bump');
 
-    // Летящий +100
     els.floatScore.textContent = '+' + SCORE_PER_WORD;
     els.floatScore.classList.remove('show');
     void els.floatScore.offsetWidth;
@@ -480,6 +492,9 @@
       els.finalOverlay.classList.add('hidden');
       startLevel(0);
     });
+
+    window.addEventListener('resize', updateCellFontSize);
+    window.addEventListener('orientationchange', updateCellFontSize);
   }
 
   // ============= INIT =============
