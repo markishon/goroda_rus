@@ -16,7 +16,7 @@
       </button>
       <div class="level-info">
         <div class="level-name" id="levelName">Постсоветское пространство</div>
-        <div class="level-sub" id="levelSub">Поле 6×6 · Раунд 1/10</div>
+        <div class="level-sub" id="levelSub">Уровень 1 · Поле 6×6 · Раунд 1/10</div>
       </div>
     </div>
     <div class="hud-right">
@@ -63,7 +63,13 @@
   </footer>
 </div>
 
-<!-- Level complete -->
+<!-- Star celebration toast -->
+<div class="star-toast hidden" id="starToast">
+  <div class="star-toast-icon">★</div>
+  <div class="star-toast-text" id="starToastText">Звезда!</div>
+</div>
+
+<!-- Region complete / stage milestone -->
 <div class="overlay hidden" id="levelOverlay">
   <div class="overlay-card">
     <div class="overlay-title" id="overlayTitle">Уровень пройден!</div>
@@ -71,7 +77,6 @@
     <div class="overlay-score" id="overlayScore">0 очков</div>
     <div class="overlay-hint" id="overlayHint"></div>
     <div class="overlay-buttons">
-      <button class="btn btn-secondary hidden" id="retryBtn">Повторить</button>
       <button class="btn btn-secondary hidden" id="toMapBtn">К карте</button>
       <button class="btn btn-primary hidden" id="nextLevelBtn">Дальше</button>
     </div>
@@ -103,7 +108,10 @@
       <span class="legend-item"><span class="legend-dot mastered"></span>5★</span>
       <span class="legend-item"><span class="legend-dot locked"></span>Закрыто</span>
     </div>
-    <button class="btn btn-secondary map-close" id="mapCloseBtn">Закрыть</button>
+    <div class="map-actions">
+      <button class="btn btn-primary hidden" id="mapContinueBtn">Продолжить здесь</button>
+      <button class="btn btn-secondary map-close" id="mapCloseBtn">Закрыть</button>
+    </div>
   </div>
 </div>
 
