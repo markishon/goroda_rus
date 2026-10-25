@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Страны, города и реки</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <header class="hud">
+    <div class="hud-left">
+      <div class="level-badge" id="levelBadge">1</div>
+      <div class="level-name" id="levelName">Постсоветское пространство</div>
+    </div>
+    <div class="hud-right">
+      <div class="score-box">
+        <span class="score-label">Очки</span>
+        <span class="score-value" id="scoreDisplay">0</span>
+      </div>
+      <div class="stars-display" id="starsDisplay">☆☆☆☆☆</div>
+    </div>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">0 / 0</div>
+  </div>
+
+  <main class="game-area">
+    <div class="grid-wrap">
+      <div class="grid" id="grid"></div>
+      <div class="float-score" id="floatScore"></div>
+    </div>
+  </main>
+
+  <footer class="controls">
+    <button class="btn btn-hint" id="hintBtn">
+      <span class="btn-icon">💡</span>
+      <span class="btn-label">Подсказка</span>
+      <span class="hint-count" id="hintsLeft">3</span>
+    </button>
+    <button class="btn btn-restart" id="restartBtn">
+      <span class="btn-icon">🔄</span>
+      <span class="btn-label">Заново</span>
+    </button>
+    <button class="btn btn-skip" id="skipBtn">
+      <span class="btn-icon">⏭</span>
+      <span class="btn-label">Пропустить</span>
+    </button>
+  </footer>
+</div>
+
+<div class="overlay hidden" id="levelOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title" id="overlayTitle">Уровень пройден!</div>
+    <div class="overlay-stars" id="overlayStars">★★★☆☆</div>
+    <div class="overlay-score" id="overlayScore">0 очков</div>
+    <div class="overlay-hint" id="overlayHint">Нужно 3 звезды для перехода</div>
+    <div class="overlay-buttons">
+      <button class="btn btn-secondary hidden" id="retryBtn">Повторить</button>
+      <button class="btn btn-primary" id="nextBtn">Дальше</button>
+    </div>
+  </div>
+</div>
+
+<div class="globe-overlay hidden" id="globeOverlay">
+  <div class="globe" id="globe">🌍</div>
+</div>
+
+<div class="overlay hidden" id="finalOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title">🎉 Поздравляем!</div>
+    <div class="overlay-subtitle">Вы прошли все уровни!</div>
+    <button class="btn btn-primary" id="restartAllBtn">Играть заново</button>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
