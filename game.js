@@ -44,7 +44,7 @@
     roundsPlayed: 0,
     levelScore: 0,
     hintsLeft: HINTS_PER_REGION,
-    roundWords: [],       // [{ word, placement:{r,c,dr,dc}, found }]
+    roundWords: [],
     grid: [],
     path: [],
     isDragging: false,
@@ -58,7 +58,7 @@
   const els = {
     grid: $('grid'),
     gridWrap: document.querySelector('.grid-wrap'),
-    wordsToFind: $('wordsToFind'),
+    roundProgress: $('roundProgress'),
     score: $('scoreDisplay'),
     record: $('recordDisplay'),
     stars: $('starsDisplay'),
@@ -224,24 +224,24 @@
   }
   function cellEl(r, c) { return els.grid.children[r * state.gridSize + c]; }
 
-  function renderWordTargets() {
-    els.wordsToFind.innerHTML = '';
-    state.roundWords.forEach((item, i) => {
-      const pill = document.createElement('div');
-      pill.className = 'word-pill' + (item.found ? ' found' : '');
-      pill.innerHTML = `<span class="pill-check">${item.found ? '✓' : ''}</span><span>${item.word}</span>`;
-      els.wordsToFind.appendChild(pill);
-    });
-  }
-  function markWordFound(idx) {
-    const pill = els.wordsToFind.children[idx];
-    if (!pill) return;
-    pill.classList.add('found');
-    pill.querySelector('.pill-check').textContent = '✓';
-    pill.animate(
-      [{ transform: 'scale(1)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }],
-      { duration: 350, easing: 'ease' }
-    );
+  // Индикатор "найдено X из 3" — нейтральные точки, без названий
+  function renderRoundProgress() {
+    const dots = els.roundProgress.children;
+    const total = state.roundWords.length;
+    // Показываем столько точек, сколько слов в раунде (обычно 3)
+    // Если точек меньше — добавим, если больше — скроем
+    while (els.roundProgress.children.length < total) {
+      const d = document.createElement('span');
+      d.className = 'round-dot';
+      els.roundProgress.appendChild(d);
+    }
+    while (els.roundProgress.children.length > total) {
+      els.roundProgress.lastElementChild.remove();
+    }
+    for (let i = 0; i < total; i++) {
+      const dot = els.roundProgress.children[i];
+      dot.classList.toggle('filled', i < state.foundInRound);
+    }
   }
 
   // ============ HUD ============
@@ -308,7 +308,7 @@
     els.grid.classList.add('refresh');
     setTimeout(() => {
       renderGrid();
-      renderWordTargets();
+      renderRoundProgress();
       els.grid.classList.remove('refresh');
       els.grid.classList.add('appear');
       setTimeout(() => els.grid.classList.remove('appear'), 500);
@@ -405,7 +405,7 @@
       el.classList.remove('selected');
       el.classList.add('word-found');
     });
-    markWordFound(idx);
+    renderRoundProgress();
 
     els.floatScore.textContent = '+' + SCORE_PER_WORD;
     els.floatScore.classList.remove('show');
